@@ -1,6 +1,7 @@
 # -*- encoding: utf-8 -*-
 import tempfile
 import os
+from stat import *
 import logging
 import shelve
 import json
@@ -9,6 +10,7 @@ import httplib
 
 import boto
 from boto.s3.key import Key
+from filechunkio import FileChunkIO
 import math
 from boto.glacier.exceptions import UnexpectedHTTPResponseError
 from boto.exception import S3ResponseError
@@ -66,6 +68,8 @@ class RotationConfig(BakthatBackend):
 
 class S3Backend(BakthatBackend):
     """Backend to handle S3 upload/download."""
+    chunk_size = 4 * 1024 * 1024 * 1024
+    
     def __init__(self, conf={}, profile="default"):
         BakthatBackend.__init__(self, conf, profile)
 
@@ -102,12 +106,21 @@ class S3Backend(BakthatBackend):
         log.info("Upload completion: {0}%".format(percent))
 
     def upload(self, keyname, filename, **kwargs):
-        k = Key(self.bucket)
-        k.key = keyname
-        upload_kwargs = {"reduced_redundancy": kwargs.get("s3_reduced_redundancy", False)}
+        fsize = os.stat(filename).st_size
+        mp = self.bucket.initiate_multipart_upload(keyname)
+        ptr = 0
+        part = 1
+        upload_kwargs = {}
         if kwargs.get("cb", True):
             upload_kwargs = dict(cb=self.cb, num_cb=10)
-        k.set_contents_from_filename(filename, **upload_kwargs)
+        while ptr <= fsize:
+            f = FileChunkIO(filename, ptr, min(ptr + self.chunk_size,  fsize) - 1)
+            mp.upload_part_from_file(f, part, **upload_kwargs)
+            f.close()
+            ptr += self.chunk_size
+            part += 1
+        k = Key(self.bucket)
+        k.key = keyname
         k.set_acl("private")
 
     def ls(self):
