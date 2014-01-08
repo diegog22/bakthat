@@ -114,7 +114,7 @@ class S3Backend(BakthatBackend):
         if kwargs.get("cb", True):
             upload_kwargs = dict(cb=self.cb, num_cb=10)
         while ptr <= fsize:
-            f = FileChunkIO(filename, ptr, min(ptr + self.chunk_size,  fsize) - 1)
+            f = FileChunkIO(filename, offset=ptr, bytes=min(ptr + self.chunk_size,  fsize) - 1)
             mp.upload_part_from_file(f, part, **upload_kwargs)
             f.close()
             ptr += self.chunk_size
@@ -250,7 +250,7 @@ class GlacierBackend(BakthatBackend):
             log.info("Downloading...")
             encrypted_out = tempfile.TemporaryFile()
 
-            # Boto related, download the file in chunk
+            # Boto related, download the file in chunk
             chunk_size = 4 * 1024 * 1024
             num_chunks = int(math.ceil(job.archive_size / float(chunk_size)))
             job._download_to_fileob(encrypted_out, num_chunks, chunk_size, True, (socket.error, httplib.IncompleteRead))
