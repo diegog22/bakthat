@@ -115,7 +115,14 @@ class S3Backend(BakthatBackend):
             upload_kwargs = dict(cb=self.cb, num_cb=10)
         while ptr <= fsize:
             f = FileChunkIO(filename, offset=ptr, bytes=min(ptr + self.chunk_size,  fsize) - 1)
-            mp.upload_part_from_file(f, part, **upload_kwargs)
+            ok = False
+            while not ok:
+                try:
+                    mp.upload_part_from_file(f, part, **upload_kwargs)
+                    ok = True
+                except:
+                    # Silly retry after an exception
+                    pass
             f.close()
             ptr += self.chunk_size
             part += 1
